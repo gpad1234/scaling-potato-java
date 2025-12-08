@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scaling Potato - NLP Query Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            color: #555;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        #queryInput {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 16px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+        
+        #queryInput:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        #submitBtn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        #submitBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        #statsBtn {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        #statsBtn:hover {
+            background: #e0e0e0;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            border: 4px solid #f0f0f0;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .response-container {
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .response-box {
+            background: #f5f5f5;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+        
+        .response-header {
+            color: #667eea;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .response-content {
+            color: #333;
+            word-break: break-word;
+            line-height: 1.6;
+        }
+        
+        .error {
+            background: #ffe0e0;
+            border-left-color: #ff6b6b;
+            color: #c00;
+        }
+        
+        .success {
+            background: #e0ffe0;
+            border-left-color: #51cf66;
+            color: #155724;
+        }
+        
+        .stats-container {
+            background: #f0f7ff;
+            border-left: 4px solid #4dabf7;
+            padding: 20px;
+            border-radius: 6px;
+        }
+        
+        .stats-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            color: #333;
+        }
+        
+        .stats-label {
+            font-weight: 600;
+        }
+        
+        .stats-value {
+            color: #667eea;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🥔 Scaling Potato</h1>
+        <p class="subtitle">NLP-Powered Query Interface with Embedded Database</p>
+        
+        <form id="queryForm">
+            <div class="form-group">
+                <label for="queryInput">Enter your query:</label>
+                <textarea id="queryInput" name="query" rows="4" placeholder="Ask me anything..." required></textarea>
+            </div>
+            
+            <div class="button-group">
+                <button type="submit" id="submitBtn">Send Query</button>
+                <button type="button" id="statsBtn">View Stats</button>
+            </div>
+        </form>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="color: #666; margin-top: 10px;">Processing your query...</p>
+        </div>
+        
+        <div class="response-container" id="responseContainer">
+            <div id="responseBox" class="response-box">
+                <div class="response-header">Response:</div>
+                <div class="response-content" id="responseContent"></div>
+            </div>
+            <div id="timeBox" class="response-box success">
+                <div class="response-header">Processing Time:</div>
+                <div class="response-content" id="responseTime"></div>
+            </div>
+        </div>
+        
+        <div class="stats-container" id="statsContainer" style="display: none;">
+            <h3 style="margin-bottom: 15px; color: #333;">Database Statistics</h3>
+            <div class="stats-item">
+                <span class="stats-label">Total Queries:</span>
+                <span class="stats-value" id="statsTotalQueries">0</span>
+            </div>
+            <div class="stats-item">
+                <span class="stats-label">Average Processing Time:</span>
+                <span class="stats-value" id="statsAvgTime">0ms</span>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const SERVER_HOST = 'localhost';
+        const SERVER_PORT = 9999;
+        
+        document.getElementById('queryForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const query = document.getElementById('queryInput').value;
+            
+            if (!query.trim()) return;
+            
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('responseContainer').style.display = 'none';
+            
+            try {
+                const response = await fetch(`http://${SERVER_HOST}:${SERVER_PORT}/query`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ query: query })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    displayResponse(data);
+                    document.getElementById('queryInput').value = '';
+                } else {
+                    showError('Server error: ' + response.statusText);
+                }
+            } catch (error) {
+                showError('Connection error: ' + error.message + '<br>Make sure the server is running on ' + SERVER_HOST + ':' + SERVER_PORT);
+            }
+            
+            document.getElementById('loading').style.display = 'none';
+        });
+        
+        document.getElementById('statsBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch(`http://${SERVER_HOST}:${SERVER_PORT}/stats`, {
+                    method: 'GET'
+                });
+                
+                if (response.ok) {
+                    const stats = await response.json();
+                    displayStats(stats);
+                } else {
+                    showError('Could not fetch statistics');
+                }
+            } catch (error) {
+                showError('Connection error: ' + error.message);
+            }
+        });
+        
+        function displayResponse(data) {
+            document.getElementById('responseContent').textContent = data.response || 'No response';
+            document.getElementById('responseTime').textContent = data.processingTime + ' ms';
+            document.getElementById('responseContainer').style.display = 'block';
+        }
+        
+        function displayStats(stats) {
+            document.getElementById('statsTotalQueries').textContent = stats.totalQueries || 0;
+            document.getElementById('statsAvgTime').textContent = (stats.averageProcessingTimeMs || 0).toFixed(2) + ' ms';
+            document.getElementById('statsContainer').style.display = 'block';
+        }
+        
+        function showError(message) {
+            document.getElementById('responseContent').innerHTML = message;
+            document.getElementById('responseBox').className = 'response-box error';
+            document.getElementById('responseContainer').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
