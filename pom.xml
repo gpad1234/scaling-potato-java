@@ -47,13 +47,6 @@
             <version>1.4.11</version>
         </dependency>
 
-        <!-- OpenAI API Client -->
-        <dependency>
-            <groupId>com.openai</groupId>
-            <artifactId>openai-java</artifactId>
-            <version>0.14.0</version>
-        </dependency>
-
         <!-- H2 Embedded Database -->
         <dependency>
             <groupId>com.h2database</groupId>
@@ -61,18 +54,11 @@
             <version>2.2.220</version>
         </dependency>
 
-        <!-- Environment Variables (.env) -->
+        <!-- JSON processing for OpenAI responses -->
         <dependency>
-            <groupId>io.github.cdimascio</groupId>
-            <artifactId>java-dotenv</artifactId>
-            <version>1.0.0</version>
-        </dependency>
-
-        <!-- JDBC for database connections -->
-        <dependency>
-            <groupId>com.zaxxer</groupId>
-            <artifactId>HikariCP</artifactId>
-            <version>5.0.1</version>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.10.1</version>
         </dependency>
     </dependencies>
 

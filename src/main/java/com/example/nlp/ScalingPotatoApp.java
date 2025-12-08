@@ -3,10 +3,14 @@ package com.example.nlp;
 import com.example.db.DatabaseService;
 import com.example.server.QueryServer;
 import com.example.server.WebServer;
-import io.github.cdimascio.dotenv.Dotenv;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Scanner;
 
 /**
@@ -25,14 +29,14 @@ public class ScalingPotatoApp {
         
         try {
             // Load environment variables from .env file
-            Dotenv dotenv = Dotenv.load();
+            Map<String, String> env = loadEnv();
             
-            String openaiApiKey = dotenv.get("OPENAI_API_KEY");
-            String dbUrl = dotenv.get("DATABASE_URL", "jdbc:h2:mem:scalingpotato");
-            String dbUser = dotenv.get("DATABASE_USER", "sa");
-            String dbPassword = dotenv.get("DATABASE_PASSWORD", "");
-            int port = Integer.parseInt(dotenv.get("PORT", "9999"));
-            int threadPoolSize = Integer.parseInt(dotenv.get("THREAD_POOL_SIZE", "50"));
+            String openaiApiKey = env.getOrDefault("OPENAI_API_KEY", "");
+            String dbUrl = env.getOrDefault("DATABASE_URL", "jdbc:h2:mem:scalingpotato");
+            String dbUser = env.getOrDefault("DATABASE_USER", "sa");
+            String dbPassword = env.getOrDefault("DATABASE_PASSWORD", "");
+            int port = Integer.parseInt(env.getOrDefault("PORT", "9999"));
+            int threadPoolSize = Integer.parseInt(env.getOrDefault("THREAD_POOL_SIZE", "50"));
             
             logger.info("Configuration loaded:");
             logger.info("  Port: {}", port);
@@ -74,5 +78,37 @@ public class ScalingPotatoApp {
             logger.error("Fatal error", e);
             System.exit(1);
         }
+    }
+    
+    /**
+     * Load environment variables from .env file
+     */
+    private static Map<String, String> loadEnv() {
+        Map<String, String> env = new HashMap<>();
+        
+        try {
+            File envFile = new File(".env");
+            if (envFile.exists()) {
+                try (BufferedReader reader = new BufferedReader(new FileReader(envFile))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        line = line.trim();
+                        if (!line.isEmpty() && !line.startsWith("#")) {
+                            String[] parts = line.split("=", 2);
+                            if (parts.length == 2) {
+                                env.put(parts[0].trim(), parts[1].trim());
+                            }
+                        }
+                    }
+                }
+                logger.info("Loaded environment from .env file");
+            } else {
+                logger.warn(".env file not found, using defaults");
+            }
+        } catch (Exception e) {
+            logger.warn("Error loading .env file: {}", e.getMessage());
+        }
+        
+        return env;
     }
 }
