@@ -400,6 +400,123 @@ The agent behavior can be customized by modifying these in `AgentNLPService`:
 
 ## Testing the Agent
 
+### Real vs Mock Mode
+
+**How to Tell What Mode You're In:**
+
+| Indicator | Real Mode (Agent) | Mock Mode |
+|-----------|------------------|-----------|
+| **Has OpenAI API Key** | Yes (in `.env`) | No key or empty |
+| **Response includes** | Real tool data + synthesis | Hardcoded potato advice |
+| **JSON response** | `"mode": "agent"` | `"mode": "agent"` (same!) |
+| **Tools Used** | Actual tools executed | Mock tools from hardcoded logic |
+| **Processing Time** | 200-500ms (API calls) | 50-150ms (instant response) |
+| **Tool Results** | Real data from database | Simulated/example data |
+| **Response Quality** | Context-aware, specific | Generic, templated |
+
+**Key Difference**: Check the **tool results** and **response content**, not the mode flag!
+
+### How the Mock Mode Works
+
+When `.env` has no `OPENAI_API_KEY`:
+
+```java
+// In AgentNLPService.callLLM()
+if (apiKey == null || apiKey.isEmpty()) {
+    return generateMockAgentResponse(userMessage);  // ← Uses hardcoded responses
+}
+```
+
+Mock responses are **realistic but generic**:
+```
+User: "How to grow potatoes in cold climates?"
+
+Mock Response:
+"[TOOLS_NEEDED]
+query_history, get_stats
+
+Based on available tools, I recommend: Plant potatoes in 
+well-draining soil, maintain 55-75°F temperature, provide 
+1-2 inches of water weekly."
+```
+
+### Enable Real Agent Mode
+
+**Step 1: Add your OpenAI API key to `.env`**
+```bash
+echo "OPENAI_API_KEY=sk-your-actual-key-here" >> .env
+```
+
+**Step 2: Restart the application**
+```bash
+mvn exec:java -Dexec.mainClass="com.example.nlp.ScalingPotatoApp"
+```
+
+**Step 3: Test and verify**
+- Real mode will make HTTP calls to `api.openai.com`
+- Processing time will be 200-500ms
+- Responses will be more context-specific
+- Check terminal logs for API calls
+
+### Verify Real Mode is Working
+
+**Check the Logs:**
+```
+[AgentNLPService] INFO: Starting agentic processing for: How to grow potatoes?
+[AgentNLPService] INFO: Agent executing tools: get_stats, query_history
+[AgentNLPService] DEBUG: Query processed with AgentNLPService
+```
+
+**Check the Response:**
+```bash
+curl -X POST http://localhost:8080/api/query \
+  -H "Content-Type: application/json" \
+  -d '{"query":"How to grow potatoes in Montana?"}' | jq .
+```
+
+Real response shows:
+- Actual tool names that were executed
+- Real tool results embedded in response
+- Specific, context-aware answer
+- Processing time > 150ms
+
+Mock response shows:
+- Hardcoded tool suggestions
+- Generic answer about potato fundamentals
+- No actual database queries
+- Processing time < 150ms
+
+### Testing Both Modes
+
+**Test 1: Check if API Key Exists**
+```bash
+cat .env | grep OPENAI_API_KEY
+```
+If it shows `OPENAI_API_KEY=sk-...` → Real mode ready
+If blank or not present → Mock mode will be used
+
+**Test 2: Compare Responses**
+
+Run the same query twice:
+1. **Without API Key** (Mock):
+   ```bash
+   mv .env .env.backup
+   mvn exec:java ...
+   # Response: Generic potato advice
+   ```
+
+2. **With API Key** (Real):
+   ```bash
+   mv .env.backup .env
+   mvn exec:java ...
+   # Response: Specific to your exact query
+   ```
+
+**Test 3: Monitor Processing Time**
+
+Real mode with tools: `"processingTime": 234`
+Mock mode: `"processingTime": 45`
+
 ### Local Testing
 
 1. **Start the application**:
@@ -476,6 +593,85 @@ Response:
 - Returns "Max iterations reached" message
 - Prevents infinite loops
 - Logs warning for investigation
+
+---
+
+## Troubleshooting: Is It Real or Mock?
+
+### Problem: Not Sure If Agent Is Using Real Tools
+
+**Quick Diagnostic:**
+
+1. **Check API Key**
+   ```bash
+   grep OPENAI_API_KEY .env
+   ```
+   - Has value starting with `sk-` → Real mode capable
+   - Empty or not present → Mock mode only
+
+2. **Check Processing Time**
+   ```bash
+   # Real mode (with API calls): 200-500ms
+   # Mock mode (instant): 50-150ms
+   ```
+
+3. **Check Response Specificity**
+   ```
+   Real: "Based on our database of 42 queries with avg processing 187ms..."
+   Mock: "Plant potatoes in well-draining soil, maintain 55-75°F..."
+   ```
+
+4. **Check Application Logs**
+   ```
+   Real: [AgentNLPService] INFO: Agent executing tools: query_history, get_stats
+   Mock: [NLPService] INFO: Using mock response (no API key)
+   ```
+
+### Problem: Getting Mock Responses When I Have an API Key
+
+**Possible Causes:**
+
+1. **API Key not loaded**
+   ```bash
+   # Make sure .env exists in project root
+   ls -la .env
+   
+   # Make sure it has the key
+   cat .env | grep OPENAI_API_KEY
+   ```
+
+2. **API Key format wrong**
+   ```bash
+   # Should be exactly: OPENAI_API_KEY=sk-xxxxx
+   # NOT: OPENAI_API_KEY = sk-xxxxx (no spaces!)
+   ```
+
+3. **Application not restarted**
+   - Kill the running app
+   - Restart it (new process reads `.env`)
+
+4. **API Key invalid/expired**
+   - Test key with direct API call:
+   ```bash
+   curl https://api.openai.com/v1/models \
+     -H "Authorization: Bearer sk-your-key"
+   ```
+   - Should return list of models (not 401 error)
+
+### Problem: Getting Different Responses Each Time
+
+**This is Normal!**
+
+Real mode responses vary because:
+- LLM generates new response each call
+- Tool results might differ slightly
+- Agent iterations might differ
+- Temperature in prompt allows variance
+
+**To Get Consistent Results:**
+- Use mock mode (always same hardcoded response)
+- Add `temperature: 0` in API call (deterministic)
+- Same query usually yields similar (not identical) responses
 
 ## Future Enhancements
 
