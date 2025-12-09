@@ -2,6 +2,8 @@ package com.example.server;
 
 import com.example.db.DatabaseService;
 import com.example.nlp.NLPService;
+import com.example.nlp.AgentNLPService;
+import com.example.mcp.MCPServerManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,19 +19,34 @@ import java.nio.file.Paths;
 
 /**
  * HTTP Server that serves the frontend and provides REST API
+ * Supports both traditional NLPService and agent-based AgentNLPService
  */
 public class WebServer {
     private static final Logger logger = LoggerFactory.getLogger(WebServer.class);
     
     private final int port;
     private final NLPService nlpService;
+    private final AgentNLPService agentService;
     private final DatabaseService dbService;
+    private final boolean useAgentMode;
     private HttpServer httpServer;
     
+    // Constructor with traditional NLPService
     public WebServer(int port, NLPService nlpService, DatabaseService dbService) {
         this.port = port;
         this.nlpService = nlpService;
+        this.agentService = null;
         this.dbService = dbService;
+        this.useAgentMode = false;
+    }
+    
+    // Constructor with AgentNLPService (MCP mode)
+    public WebServer(int port, AgentNLPService agentService, DatabaseService dbService) {
+        this.port = port;
+        this.nlpService = null;
+        this.agentService = agentService;
+        this.dbService = dbService;
+        this.useAgentMode = true;
     }
     
     /**
@@ -40,7 +57,7 @@ public class WebServer {
             httpServer = HttpServer.create(new InetSocketAddress(port), 0);
             
             // Register API endpoints FIRST (more specific paths must come first)
-            httpServer.createContext("/api/query", new QueryHandler(nlpService, dbService));
+            httpServer.createContext("/api/query", new QueryHandler(nlpService, agentService, dbService, useAgentMode));
             httpServer.createContext("/api/stats", new StatsHandler(dbService));
             
             // Serve frontend HTML as catch-all (less specific path comes last)
@@ -49,7 +66,8 @@ public class WebServer {
             httpServer.setExecutor(null); // Default executor
             httpServer.start();
             
-            logger.info("HTTP Server started on port {}", port);
+            String mode = useAgentMode ? "Agent (MCP)" : "Traditional";
+            logger.info("HTTP Server started on port {} in {} mode", port, mode);
             
         } catch (IOException e) {
             logger.error("Error starting HTTP server", e);
@@ -96,11 +114,15 @@ public class WebServer {
      */
     private static class QueryHandler implements HttpHandler {
         private final NLPService nlpService;
+        private final AgentNLPService agentService;
         private final DatabaseService dbService;
+        private final boolean useAgentMode;
         
-        QueryHandler(NLPService nlpService, DatabaseService dbService) {
+        QueryHandler(NLPService nlpService, AgentNLPService agentService, DatabaseService dbService, boolean useAgentMode) {
             this.nlpService = nlpService;
+            this.agentService = agentService;
             this.dbService = dbService;
+            this.useAgentMode = useAgentMode;
         }
         
         @Override
@@ -130,7 +152,19 @@ public class WebServer {
                     String query = extractJsonField(body.toString(), "query");
                     
                     long startTime = System.currentTimeMillis();
-                    String response = nlpService.processQuery(query);
+                    String response;
+                    
+                    // Use agent mode if available, otherwise use traditional NLP
+                    if (useAgentMode && agentService != null) {
+                        response = agentService.processQueryWithAgent(query);
+                        logger.debug("Query processed with AgentNLPService");
+                    } else if (nlpService != null) {
+                        response = nlpService.processQuery(query);
+                        logger.debug("Query processed with NLPService");
+                    } else {
+                        throw new Exception("No NLP service available");
+                    }
+                    
                     long processingTime = System.currentTimeMillis() - startTime;
                     
                     try {
@@ -141,9 +175,10 @@ public class WebServer {
                     }
                     
                     String jsonResponse = String.format(
-                        "{\"response\": \"%s\", \"processingTime\": %d}",
+                        "{\"response\": \"%s\", \"processingTime\": %d, \"mode\": \"%s\"}",
                         escapeJson(response),
-                        processingTime
+                        processingTime,
+                        useAgentMode ? "agent" : "traditional"
                     );
                     
                     exchange.getResponseHeaders().set("Content-Type", "application/json");

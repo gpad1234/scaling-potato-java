@@ -1,6 +1,8 @@
 package com.example.nlp;
 
 import com.example.db.DatabaseService;
+import com.example.mcp.DatabaseMCPServer;
+import com.example.mcp.MCPServerManager;
 import com.example.server.QueryServer;
 import com.example.server.WebServer;
 import org.slf4j.Logger;
@@ -16,12 +18,14 @@ import java.util.Scanner;
 /**
  * Main entry point for Scaling Potato NLP Application
  * Starts the socket server, HTTP server, and manages NLP/Database services
+ * Enhanced with MCP (Model Context Protocol) servers and agentic NLP service
  */
 public class ScalingPotatoApp {
     private static final Logger logger = LoggerFactory.getLogger(ScalingPotatoApp.class);
     
     private static QueryServer server;
     private static WebServer webServer;
+    private static MCPServerManager mcpManager;
     
     public static void main(String[] args) {
         logger.info("=== Scaling Potato NLP Application ===");
@@ -48,12 +52,23 @@ public class ScalingPotatoApp {
             NLPService nlpService = new NLPService(openaiApiKey, "gpt-3.5-turbo");
             DatabaseService dbService = new DatabaseService(dbUrl, dbUser, dbPassword);
             
+            // Initialize MCP Manager with Database MCP Server
+            logger.info("Initializing MCP (Model Context Protocol) servers...");
+            mcpManager = new MCPServerManager();
+            mcpManager.registerServer(new DatabaseMCPServer(dbService));
+            mcpManager.startAll();
+            
+            // Create agent-based NLP service with tool capabilities
+            AgentNLPService agentService = new AgentNLPService(openaiApiKey, "gpt-3.5-turbo", mcpManager);
+            logger.info("AgentNLPService initialized with {} MCP servers", mcpManager.getAllServers().size());
+            logger.info(mcpManager.getStatus());
+            
             // Create and start socket server
             server = new QueryServer(port, threadPoolSize, nlpService, dbService);
             server.start();
             
-            // Create and start HTTP/web server
-            webServer = new WebServer(8080, nlpService, dbService);
+            // Create and start HTTP/web server with AGENT mode
+            webServer = new WebServer(8080, agentService, dbService);
             webServer.start();
             
             logger.info("Server started successfully!");
@@ -61,10 +76,10 @@ public class ScalingPotatoApp {
             logger.info("Or connect to socket server on port {}", port);
             logger.info("Press Ctrl+C to shutdown the servers");
             
-            // Keep server running - use a simple approach
             // Add shutdown hook for graceful shutdown
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 logger.info("Shutting down...");
+                if (mcpManager != null) mcpManager.shutdownAll();
                 if (server != null) server.stop();
                 if (webServer != null) webServer.stop();
             }));
