@@ -236,7 +236,7 @@
     
     <script>
         const SERVER_HOST = 'localhost';
-        const SERVER_PORT = 9999;
+        const SERVER_PORT = 8080;
         
         document.getElementById('queryForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -248,7 +248,7 @@
             document.getElementById('responseContainer').style.display = 'none';
             
             try {
-                const response = await fetch(`http://${SERVER_HOST}:${SERVER_PORT}/query`, {
+                const response = await fetch(`http://${SERVER_HOST}:${SERVER_PORT}/api/query`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -272,7 +272,7 @@
         
         document.getElementById('statsBtn').addEventListener('click', async () => {
             try {
-                const response = await fetch(`http://${SERVER_HOST}:${SERVER_PORT}/stats`, {
+                const response = await fetch(`http://${SERVER_HOST}:${SERVER_PORT}/api/stats`, {
                     method: 'GET'
                 });
                 

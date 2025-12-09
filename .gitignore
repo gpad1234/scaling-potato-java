@@ -33,3 +33,13 @@ dist/
 *.jar
 *.war
 *.ear
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Server Logs
+server.log
+/tmp/server.log

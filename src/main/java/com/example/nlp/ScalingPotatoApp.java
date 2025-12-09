@@ -59,18 +59,25 @@ public class ScalingPotatoApp {
             logger.info("Server started successfully!");
             logger.info("Open http://localhost:8080 in your browser");
             logger.info("Or connect to socket server on port {}", port);
-            logger.info("Press 'q' to shutdown the servers");
+            logger.info("Press Ctrl+C to shutdown the servers");
             
-            // Keep server running until user quits
-            Scanner scanner = new Scanner(System.in);
-            String input;
-            while (true) {
-                input = scanner.nextLine().trim().toLowerCase();
-                if (input.equals("q") || input.equals("quit")) {
-                    logger.info("Shutting down...");
+            // Keep server running - use a simple approach
+            // Add shutdown hook for graceful shutdown
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                logger.info("Shutting down...");
+                if (server != null) server.stop();
+                if (webServer != null) webServer.stop();
+            }));
+            
+            // Keep the main thread alive
+            Object lock = new Object();
+            synchronized (lock) {
+                try {
+                    lock.wait();
+                } catch (InterruptedException e) {
+                    logger.info("Interrupted");
                     server.stop();
                     webServer.stop();
-                    break;
                 }
             }
             

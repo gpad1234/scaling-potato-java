@@ -39,12 +39,12 @@ public class WebServer {
         try {
             httpServer = HttpServer.create(new InetSocketAddress(port), 0);
             
-            // Serve frontend HTML
-            httpServer.createContext("/", exchange -> serveFile(exchange, "index.html", "text/html"));
-            
-            // REST API endpoints
+            // Register API endpoints FIRST (more specific paths must come first)
             httpServer.createContext("/api/query", new QueryHandler(nlpService, dbService));
             httpServer.createContext("/api/stats", new StatsHandler(dbService));
+            
+            // Serve frontend HTML as catch-all (less specific path comes last)
+            httpServer.createContext("/", exchange -> serveFile(exchange, "index.html", "text/html"));
             
             httpServer.setExecutor(null); // Default executor
             httpServer.start();
@@ -105,37 +105,61 @@ public class WebServer {
         
         @Override
         public void handle(HttpExchange exchange) throws IOException {
+            // Handle CORS preflight
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+            exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+            
+            if ("OPTIONS".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(204, -1);
+                return;
+            }
+            
             if ("POST".equals(exchange.getRequestMethod())) {
-                // Read request body
-                InputStreamReader isr = new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8);
-                BufferedReader br = new BufferedReader(isr);
-                StringBuilder body = new StringBuilder();
-                String line;
-                while ((line = br.readLine()) != null) {
-                    body.append(line);
-                }
-                
-                // Simple JSON parsing (in production use proper JSON library)
-                String query = extractJsonField(body.toString(), "query");
-                
-                long startTime = System.currentTimeMillis();
-                String response = nlpService.processQuery(query);
-                long processingTime = System.currentTimeMillis() - startTime;
-                
-                dbService.saveQueryResult(query, response, processingTime);
-                
-                String jsonResponse = String.format(
-                    "{\"response\": \"%s\", \"processingTime\": %d}",
-                    escapeJson(response),
-                    processingTime
-                );
-                
-                exchange.getResponseHeaders().set("Content-Type", "application/json");
-                exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-                exchange.sendResponseHeaders(200, jsonResponse.length());
-                
-                try (OutputStream os = exchange.getResponseBody()) {
-                    os.write(jsonResponse.getBytes());
+                try {
+                    // Read request body
+                    InputStreamReader isr = new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8);
+                    BufferedReader br = new BufferedReader(isr);
+                    StringBuilder body = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        body.append(line);
+                    }
+                    
+                    // Simple JSON parsing (in production use proper JSON library)
+                    String query = extractJsonField(body.toString(), "query");
+                    
+                    long startTime = System.currentTimeMillis();
+                    String response = nlpService.processQuery(query);
+                    long processingTime = System.currentTimeMillis() - startTime;
+                    
+                    try {
+                        dbService.saveQueryResult(query, response, processingTime);
+                    } catch (Exception e) {
+                        logger.warn("Failed to save query result to database: {}", e.getMessage());
+                        // Continue even if database save fails
+                    }
+                    
+                    String jsonResponse = String.format(
+                        "{\"response\": \"%s\", \"processingTime\": %d}",
+                        escapeJson(response),
+                        processingTime
+                    );
+                    
+                    exchange.getResponseHeaders().set("Content-Type", "application/json");
+                    exchange.sendResponseHeaders(200, jsonResponse.length());
+                    
+                    try (OutputStream os = exchange.getResponseBody()) {
+                        os.write(jsonResponse.getBytes());
+                    }
+                } catch (Exception e) {
+                    logger.error("Error handling query request", e);
+                    String errorResponse = "{\"error\": \"Internal server error\"}";
+                    exchange.getResponseHeaders().set("Content-Type", "application/json");
+                    exchange.sendResponseHeaders(500, errorResponse.length());
+                    try (OutputStream os = exchange.getResponseBody()) {
+                        os.write(errorResponse.getBytes());
+                    }
                 }
             } else {
                 exchange.sendResponseHeaders(405, 0);
@@ -155,21 +179,40 @@ public class WebServer {
         
         @Override
         public void handle(HttpExchange exchange) throws IOException {
+            // Handle CORS preflight
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, OPTIONS");
+            exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+            
+            if ("OPTIONS".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(204, -1);
+                return;
+            }
+            
             if ("GET".equals(exchange.getRequestMethod())) {
-                DatabaseService.DatabaseStats stats = dbService.getStats();
-                
-                String jsonResponse = String.format(
-                    "{\"totalQueries\": %d, \"averageProcessingTimeMs\": %.2f}",
-                    stats.totalQueries,
-                    stats.averageProcessingTimeMs
-                );
-                
-                exchange.getResponseHeaders().set("Content-Type", "application/json");
-                exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-                exchange.sendResponseHeaders(200, jsonResponse.length());
-                
-                try (OutputStream os = exchange.getResponseBody()) {
-                    os.write(jsonResponse.getBytes());
+                try {
+                    DatabaseService.DatabaseStats stats = dbService.getStats();
+                    
+                    String jsonResponse = String.format(
+                        "{\"totalQueries\": %d, \"averageProcessingTimeMs\": %.2f}",
+                        stats.totalQueries,
+                        stats.averageProcessingTimeMs
+                    );
+                    
+                    exchange.getResponseHeaders().set("Content-Type", "application/json");
+                    exchange.sendResponseHeaders(200, jsonResponse.length());
+                    
+                    try (OutputStream os = exchange.getResponseBody()) {
+                        os.write(jsonResponse.getBytes());
+                    }
+                } catch (Exception e) {
+                    logger.error("Error handling stats request", e);
+                    String errorResponse = "{\"error\": \"Internal server error\"}";
+                    exchange.getResponseHeaders().set("Content-Type", "application/json");
+                    exchange.sendResponseHeaders(500, errorResponse.length());
+                    try (OutputStream os = exchange.getResponseBody()) {
+                        os.write(errorResponse.getBytes());
+                    }
                 }
             } else {
                 exchange.sendResponseHeaders(405, 0);
